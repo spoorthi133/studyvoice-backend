@@ -76,4 +76,9 @@ public class StudyRoomController {
             @PathVariable Long roomId) {
         return ResponseEntity.ok(studyRoomService.getRoom(roomId));
     }
+
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("OK");
+    }
 }
