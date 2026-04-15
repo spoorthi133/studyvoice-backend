@@ -95,6 +95,10 @@ public class WebSocketHandler extends TextWebSocketHandler {
                 case BREAK_END    -> handleBreakEnd(session, wsMessage, email);
                 case TIMER_SYNC   -> handleTimerSync(session, wsMessage, email);
                 case CHAT_MESSAGE -> handleChatMessage(session, wsMessage, email);
+                case MUTE_STATUS     -> handleMuteStatus(session, wsMessage, email);
+                case WHITEBOARD_DRAW -> handleWhiteboardDraw(session, wsMessage, email);
+                case WHITEBOARD_CLEAR -> handleWhiteboardClear(session, wsMessage, email);
+                case REACTION        -> handleReaction(session, wsMessage, email);
                 default -> sendError(session, "Unknown message type");
             }
 
@@ -435,5 +439,58 @@ public class WebSocketHandler extends TextWebSocketHandler {
                 .build());
 
         log.info("Chat message from {} in room {}", email, roomId);
+    }
+
+    // ─── MUTE STATUS ──────────────────────────────────────────────────
+    private void handleMuteStatus(WebSocketSession session,
+                                  WebSocketMessage message,
+                                  String email) throws IOException {
+        Long roomId = message.getRoomId();
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type(WebSocketMessage.MessageType.MUTE_STATUS)
+                .roomId(roomId)
+                .senderEmail(email)
+                .senderName(getFullName(email))
+                .content(message.getContent()) // "muted" or "unmuted"
+                .build());
+    }
+
+    // ─── WHITEBOARD DRAW ──────────────────────────────────────────────
+    private void handleWhiteboardDraw(WebSocketSession session,
+                                      WebSocketMessage message,
+                                      String email) throws IOException {
+        Long roomId = message.getRoomId();
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type(WebSocketMessage.MessageType.WHITEBOARD_DRAW)
+                .roomId(roomId)
+                .senderEmail(email)
+                .content(message.getContent()) // JSON path data
+                .build());
+    }
+
+    // ─── WHITEBOARD CLEAR ─────────────────────────────────────────────
+    private void handleWhiteboardClear(WebSocketSession session,
+                                       WebSocketMessage message,
+                                       String email) throws IOException {
+        Long roomId = message.getRoomId();
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type(WebSocketMessage.MessageType.WHITEBOARD_CLEAR)
+                .roomId(roomId)
+                .senderEmail(email)
+                .build());
+    }
+
+    // ─── REACTION ─────────────────────────────────────────────────────
+    private void handleReaction(WebSocketSession session,
+                                WebSocketMessage message,
+                                String email) throws IOException {
+        Long roomId = message.getRoomId();
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type(WebSocketMessage.MessageType.REACTION)
+                .roomId(roomId)
+                .senderEmail(email)
+                .senderName(getFullName(email))
+                .content(message.getContent()) // emoji
+                .build());
     }
 }

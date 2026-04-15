@@ -43,6 +43,10 @@ public class WebSocketMessage {
         BREAK_END,
         TIMER_SYNC,
         CHAT_MESSAGE,
+        MUTE_STATUS,
+        WHITEBOARD_DRAW,
+        WHITEBOARD_CLEAR,
+        REACTION,
         ERROR
     }
 }
