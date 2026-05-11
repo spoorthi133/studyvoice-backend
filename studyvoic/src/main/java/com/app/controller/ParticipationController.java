@@ -1,5 +1,6 @@
 package com.app.controller;
 
+import com.app.dto.ParticipationHistoryDto;
 import com.app.model.ParticipationRecord;
 import com.app.service.ParticipationService;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +10,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/participation")
@@ -17,31 +19,30 @@ public class ParticipationController {
 
     private final ParticipationService participationService;
 
-    // Get all participation records for a room
     @GetMapping("/room/{roomId}")
-    public ResponseEntity<List<ParticipationRecord>> getRoomParticipation(
+    public ResponseEntity<List<ParticipationHistoryDto>> getRoomParticipation(
             @PathVariable Long roomId) {
-
         return ResponseEntity.ok(
-                participationService.getRoomParticipation(roomId));
+                participationService.getRoomParticipation(roomId).stream()
+                        .map(ParticipationHistoryDto::from)
+                        .collect(Collectors.toList()));
     }
 
-    // Get currently active participants in a room
     @GetMapping("/room/{roomId}/active")
-    public ResponseEntity<List<ParticipationRecord>> getActiveParticipants(
+    public ResponseEntity<List<ParticipationHistoryDto>> getActiveParticipants(
             @PathVariable Long roomId) {
-
         return ResponseEntity.ok(
-                participationService.getActiveParticipants(roomId));
+                participationService.getActiveParticipants(roomId).stream()
+                        .map(ParticipationHistoryDto::from)
+                        .collect(Collectors.toList()));
     }
 
-    // Get logged in user's study history
     @GetMapping("/user/me")
-    public ResponseEntity<List<ParticipationRecord>> getMyHistory(
+    public ResponseEntity<List<ParticipationHistoryDto>> getMyHistory(
             @AuthenticationPrincipal UserDetails userDetails) {
-
         return ResponseEntity.ok(
-                participationService.getUserHistory(
-                        userDetails.getUsername()));
+                participationService.getUserHistory(userDetails.getUsername()).stream()
+                        .map(ParticipationHistoryDto::from)
+                        .collect(Collectors.toList()));
     }
 }

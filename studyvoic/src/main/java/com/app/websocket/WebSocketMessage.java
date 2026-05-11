@@ -26,6 +26,10 @@ public class WebSocketMessage {
     // Optional extra content (e.g. note text)
     private String content;
     private String token;
+
+    // For P2P WebRTC signaling – route to a specific user instead of broadcast
+    private String targetEmail;
+
     // All possible message types
     public enum MessageType {
         JOIN_ROOM,
@@ -47,6 +51,9 @@ public class WebSocketMessage {
         WHITEBOARD_DRAW,
         WHITEBOARD_CLEAR,
         REACTION,
+        WEBRTC_OFFER,
+        WEBRTC_ANSWER,
+        WEBRTC_ICE,
         ERROR
     }
 }

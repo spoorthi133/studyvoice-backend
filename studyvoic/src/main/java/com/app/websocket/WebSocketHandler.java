@@ -61,6 +61,10 @@ public class WebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Long> sessionRooms
             = new ConcurrentHashMap<>();
 
+    // email → session (for P2P WebRTC routing)
+    private final Map<String, WebSocketSession> emailToSession
+            = new ConcurrentHashMap<>();
+
     // ─── Called when phone connects ───────────────────────────────────
     @Override
     public void afterConnectionEstablished(WebSocketSession session)
@@ -99,6 +103,9 @@ public class WebSocketHandler extends TextWebSocketHandler {
                 case WHITEBOARD_DRAW -> handleWhiteboardDraw(session, wsMessage, email);
                 case WHITEBOARD_CLEAR -> handleWhiteboardClear(session, wsMessage, email);
                 case REACTION        -> handleReaction(session, wsMessage, email);
+                case WEBRTC_OFFER    -> handleWebRtcSignal(session, wsMessage, email);
+                case WEBRTC_ANSWER   -> handleWebRtcSignal(session, wsMessage, email);
+                case WEBRTC_ICE      -> handleWebRtcSignal(session, wsMessage, email);
                 default -> sendError(session, "Unknown message type");
             }
 
@@ -119,6 +126,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
             removeFromRoom(session, roomId, email);
         }
 
+        if (email != null) emailToSession.remove(email);
         sessionUsers.remove(session.getId());
         sessionRooms.remove(session.getId());
         log.info("Connection closed: {}", session.getId());
@@ -136,6 +144,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
         sessionRooms.put(session.getId(), roomId);
         sessionUsers.put(session.getId(), email);
+        emailToSession.put(email, session);
         raiseHandQueues.computeIfAbsent(roomId, k -> new LinkedList<>());
 
         String fullName = getFullName(email);
@@ -167,10 +176,19 @@ public class WebSocketHandler extends TextWebSocketHandler {
         Queue<String> queue = raiseHandQueues.computeIfAbsent(
                 roomId, k -> new LinkedList<>());
 
-        if (!queue.contains(email)) {
-            queue.add(email);
-        }
+        boolean isNew = !queue.contains(email);
+        if (isNew) queue.add(email);
 
+        // Broadcast individual raise-hand event so clients can show a notification
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type(WebSocketMessage.MessageType.RAISE_HAND)
+                .roomId(roomId)
+                .senderEmail(email)
+                .senderName(getFullName(email))
+                .content(isNew ? "raised" : "already_raised")
+                .build());
+
+        // Also send the full queue so clients can update their list
         broadcastToRoom(roomId, WebSocketMessage.builder()
                 .type(WebSocketMessage.MessageType.QUEUE_UPDATE)
                 .roomId(roomId)
@@ -189,9 +207,15 @@ public class WebSocketHandler extends TextWebSocketHandler {
         Long roomId = message.getRoomId();
         Queue<String> queue = raiseHandQueues.get(roomId);
 
-        if (queue != null) {
-            queue.remove(email);
-        }
+        if (queue != null) queue.remove(email);
+
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type(WebSocketMessage.MessageType.LOWER_HAND)
+                .roomId(roomId)
+                .senderEmail(email)
+                .senderName(getFullName(email))
+                .content("lowered")
+                .build());
 
         broadcastToRoom(roomId, WebSocketMessage.builder()
                 .type(WebSocketMessage.MessageType.QUEUE_UPDATE)
@@ -209,6 +233,9 @@ public class WebSocketHandler extends TextWebSocketHandler {
         Long roomId = message.getRoomId();
         Queue<String> queue = raiseHandQueues.get(roomId);
 
+        // Capture previous speaker BEFORE updating the map
+        String previousSpeaker = currentSpeakers.get(roomId);
+
         String nextSpeaker = (queue != null && !queue.isEmpty())
                 ? queue.poll() : null;
 
@@ -222,15 +249,15 @@ public class WebSocketHandler extends TextWebSocketHandler {
                 .type(WebSocketMessage.MessageType.NEXT_SPEAKER)
                 .roomId(roomId)
                 .senderEmail(email)
+                .senderName(nextSpeaker != null ? getFullName(nextSpeaker) : null)
                 .content(nextSpeaker != null ? nextSpeaker : "none")
                 .build());
-        // Stop previous speaker timer
-        String previousSpeaker = currentSpeakers.get(roomId);
+
+        // Stop previous speaker's timer
         if (previousSpeaker != null) {
             participationService.recordSpeakingEnd(previousSpeaker, roomId);
         }
-
-// Start new speaker timer
+        // Start new speaker's timer
         if (nextSpeaker != null) {
             participationService.recordSpeakingStart(nextSpeaker, roomId);
         }
@@ -490,7 +517,35 @@ public class WebSocketHandler extends TextWebSocketHandler {
                 .roomId(roomId)
                 .senderEmail(email)
                 .senderName(getFullName(email))
-                .content(message.getContent()) // emoji
+                .content(message.getContent())
                 .build());
+    }
+
+    // ─── WEBRTC SIGNALING (P2P routing) ──────────────────────────────
+    private void handleWebRtcSignal(WebSocketSession session,
+                                    WebSocketMessage message,
+                                    String email) throws IOException {
+        String targetEmail = message.getTargetEmail();
+        if (targetEmail == null) {
+            sendError(session, "targetEmail required for WebRTC signaling");
+            return;
+        }
+
+        WebSocketSession targetSession = emailToSession.get(targetEmail);
+        if (targetSession == null || !targetSession.isOpen()) {
+            log.warn("WebRTC target {} not found or disconnected", targetEmail);
+            return;
+        }
+
+        String json = jsonMapper.writeValueAsString(
+                WebSocketMessage.builder()
+                        .type(message.getType())
+                        .roomId(message.getRoomId())
+                        .senderEmail(email)
+                        .senderName(getFullName(email))
+                        .content(message.getContent())
+                        .build());
+        targetSession.sendMessage(new TextMessage(json));
+        log.info("WebRTC {} relayed from {} to {}", message.getType(), email, targetEmail);
     }
 }
