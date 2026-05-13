@@ -17,6 +17,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import com.app.repository.UserRepository;
 
@@ -37,9 +38,11 @@ public class SecurityConfig {
 
                 // Define route permissions
                 .authorizeHttpRequests(auth -> auth
-                        // Public routes — no token needed
-                        .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers("/ws/**").permitAll()
+                        // Public routes — explicit AntPathRequestMatcher required
+                        // for Spring Security 7 (Spring Boot 4) compatibility
+                        .requestMatchers(new AntPathRequestMatcher("/auth/**")).permitAll()
+                        .requestMatchers(new AntPathRequestMatcher("/ws/**")).permitAll()
+                        .requestMatchers(new AntPathRequestMatcher("/actuator/**")).permitAll()
                         // Everything else needs a token
                         .anyRequest().authenticated()
                 )
