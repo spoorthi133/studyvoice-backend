@@ -17,7 +17,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.http.HttpMethod;
 
 import com.app.repository.UserRepository;
 
@@ -38,11 +38,11 @@ public class SecurityConfig {
 
                 // Define route permissions
                 .authorizeHttpRequests(auth -> auth
-                        // Public routes — explicit AntPathRequestMatcher required
-                        // for Spring Security 7 (Spring Boot 4) compatibility
-                        .requestMatchers(new AntPathRequestMatcher("/auth/**")).permitAll()
-                        .requestMatchers(new AntPathRequestMatcher("/ws/**")).permitAll()
-                        .requestMatchers(new AntPathRequestMatcher("/actuator/**")).permitAll()
+                        // Auth endpoints — explicitly permit POST methods
+                        .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                        // WebSocket handshake uses GET
+                        .requestMatchers(HttpMethod.GET, "/ws/**").permitAll()
                         // Everything else needs a token
                         .anyRequest().authenticated()
                 )
